@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>다시보기 백업</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <h1 id="pageHeading">다시보기 살리기 운동</h1>
+        </div>
+        <div class="hero-panel">
+          <dl id="metaPanel" class="meta-list"></dl>
+          <div class="hero-actions">
+            <button id="refreshButton" class="button primary" type="button">수동 새로고침</button>
+          </div>
+        </div>
+      </header>
+
+      <section class="toolbar">
+        <div id="filterBar" class="filter-bar"></div>
+        <label class="search-box">
+          <span>검색</span>
+          <input id="searchInput" type="search" placeholder="제목으로 찾기" />
+        </label>
+      </section>
+
+      <section class="table-card">
+        <div class="table-head">
+          <h2 id="tableTitle">다시보기 목록</h2>
+          <p id="tableCaption" class="table-caption"></p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>업로드</th>
+                <th>다시보기</th>
+                <th>조회수</th>
+                <th>분류</th>
+                <th>확인 상태</th>
+              </tr>
+            </thead>
+            <tbody id="vodTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <template id="emptyStateTemplate">
+      <tr>
+        <td colspan="5" class="empty-state">조건에 맞는 다시보기가 없습니다.</td>
+      </tr>
+    </template>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

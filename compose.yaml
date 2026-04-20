@@ -1,0 +1,19 @@
+services:
+  soop-replay-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: soop-replay-monitor
+    environment:
+      SOOP_STREAMER_ID: "kyaang123"
+      SOOP_DISPLAY_NAME: "캬앙"
+      SOOP_STREAMER_TIER: "best"
+      SOOP_POLICY_DATE: "2026-06-01"
+      SOOP_POLL_INTERVAL_SECONDS: "60"
+      SOOP_HOST: "0.0.0.0"
+      SOOP_PORT: "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
