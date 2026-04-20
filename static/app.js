@@ -3,6 +3,7 @@ const state = {
   filter: "all",
   search: "",
 };
+const POLL_INTERVAL_MS = 60000;
 
 const filterDefinitions = [
   { key: "all", label: "전체" },
@@ -26,6 +27,38 @@ async function fetchJson(url, options = {}) {
     throw new Error(`Request failed: ${response.status}`);
   }
   return response.json();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return char;
+    }
+  });
+}
+
+function sanitizeUrl(value, fallback = "") {
+  if (!value) return fallback;
+  try {
+    const url = new URL(String(value), window.location.origin);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.toString();
+    }
+  } catch (error) {
+    return fallback;
+  }
+  return fallback;
 }
 
 function number(value) {
@@ -106,8 +139,8 @@ function renderMeta(snapshot) {
     .map(
       ([label, value]) => `
         <div class="meta-row">
-          <dt>${label}</dt>
-          <dd>${value}</dd>
+          <dt>${escapeHtml(label)}</dt>
+          <dd>${escapeHtml(value)}</dd>
         </div>
       `
     )
@@ -142,7 +175,8 @@ function renderFilters(snapshot) {
 function filteredVods(snapshot) {
   const query = state.search.trim().toLowerCase();
   return snapshot.vods.filter((vod) => {
-    if (query && !vod.title_name.toLowerCase().includes(query)) {
+    const title = String(vod.title_name || "").toLowerCase();
+    if (query && !title.includes(query)) {
       return false;
     }
 
@@ -169,6 +203,14 @@ function filteredVods(snapshot) {
   });
 }
 
+function safePlayerUrl(vod) {
+  return sanitizeUrl(vod.player_url, "#");
+}
+
+function safeThumbnailUrl(vod) {
+  return sanitizeUrl(vod.thumbnail_url, "");
+}
+
 function renderTable(snapshot) {
   const vods = filteredVods(snapshot);
   const title = document.getElementById("tableTitle");
@@ -189,22 +231,22 @@ function renderTable(snapshot) {
       (vod) => `
         <tr>
           <td class="cell-upload">
-            <div class="mono-copy">${formatUploadDateTime(vod.uploaded_at)}</div>
-            <div class="mini-copy">${vod.duration_label}</div>
+            <div class="mono-copy">${escapeHtml(formatUploadDateTime(vod.uploaded_at))}</div>
+            <div class="mini-copy">${escapeHtml(vod.duration_label)}</div>
           </td>
           <td class="cell-title">
             <div class="vod-title">
-              <a class="vod-thumb" href="${vod.player_url}" target="_blank" rel="noreferrer">
-                <img src="${vod.thumbnail_url}" alt="" loading="lazy" />
+              <a class="vod-thumb" href="${escapeHtml(safePlayerUrl(vod))}" target="_blank" rel="noreferrer">
+                <img src="${escapeHtml(safeThumbnailUrl(vod))}" alt="" loading="lazy" />
               </a>
               <div class="vod-body">
-                <h3><a href="${vod.player_url}" target="_blank" rel="noreferrer">${vod.title_name}</a></h3>
+                <h3><a href="${escapeHtml(safePlayerUrl(vod))}" target="_blank" rel="noreferrer">${escapeHtml(vod.title_name)}</a></h3>
                 <div class="inline-meta">
                   ${vod.future_permanent ? `<span class="badge safe">영구보관</span>` : ""}
                   ${vod.delete_on_policy_day ? `<span class="badge danger">6월 1일 삭제</span>` : ""}
                   ${vod.views_900_plus ? `<span class="badge">순수조회 900+</span>` : ""}
                   ${vod.views_1000_plus ? `<span class="badge safe">순수조회 1000회 초과</span>` : ""}
-                  ${vod.auto_support_confirmed ? `<span class="badge safe">${autoSupportBadgeLabel(vod)}</span>` : ""}
+                  ${vod.auto_support_confirmed ? `<span class="badge safe">${escapeHtml(autoSupportBadgeLabel(vod))}</span>` : ""}
                 </div>
               </div>
             </div>
@@ -219,17 +261,17 @@ function renderTable(snapshot) {
           </td>
           <td class="cell-policy">
             <div class="status-stack">
-              <span class="badge ${vod.future_permanent ? "safe" : "danger"}">${policyLabel(vod)}</span>
+              <span class="badge ${vod.future_permanent ? "safe" : "danger"}">${escapeHtml(policyLabel(vod))}</span>
             </div>
-            ${policyReasonLabel(vod) ? `<div class="mini-copy">${policyReasonLabel(vod)}</div>` : ""}
+            ${policyReasonLabel(vod) ? `<div class="mini-copy">${escapeHtml(policyReasonLabel(vod))}</div>` : ""}
           </td>
           <td class="cell-status">
             <div class="status-stack">
               <span class="badge ${vod.support_confirmation_mode === "auto" ? "safe" : ""}">
-                ${statusLabel(vod)}
+                ${escapeHtml(statusLabel(vod))}
               </span>
             </div>
-            ${vod.auto_support_confirmed ? `<div class="mini-copy">${autoSupportDetail(vod)}</div>` : ""}
+            ${vod.auto_support_confirmed ? `<div class="mini-copy">${escapeHtml(autoSupportDetail(vod))}</div>` : ""}
           </td>
         </tr>
       `
@@ -250,11 +292,6 @@ async function loadSnapshot() {
   render();
 }
 
-document.getElementById("refreshButton").addEventListener("click", async () => {
-  await fetchJson("/api/refresh", { method: "POST" });
-  await loadSnapshot();
-});
-
 document.getElementById("filterBar").addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
   if (!button) return;
@@ -268,4 +305,4 @@ document.getElementById("searchInput").addEventListener("input", (event) => {
 });
 
 loadSnapshot();
-setInterval(loadSnapshot, 30000);
+setInterval(loadSnapshot, POLL_INTERVAL_MS);

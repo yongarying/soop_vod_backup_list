@@ -33,6 +33,43 @@ DEFAULT_PAGE_HEADING = "{display_name} 다시보기 살리기 운동"
 MAX_FETCH_WORKERS = 8
 MAX_COMMENT_SCAN_WORKERS = 4
 COMMENT_ROWS_PER_PAGE = 100
+PUBLIC_SUMMARY_FIELDS = (
+    "total",
+    "policy_day_delete",
+    "soon_after_policy",
+    "other_count",
+    "views_900_plus",
+    "views_1000_plus",
+    "future_permanent",
+    "confirmed",
+)
+PUBLIC_VOD_FIELDS = (
+    "title_no",
+    "title_name",
+    "player_url",
+    "thumbnail_url",
+    "uploaded_at",
+    "duration_label",
+    "display_views",
+    "pure_views",
+    "estimated_live_views",
+    "merged_view_count_applies",
+    "comment_count",
+    "future_permanent",
+    "future_expiry_date",
+    "future_reason",
+    "delete_on_policy_day",
+    "urgency",
+    "support_confirmed",
+    "support_confirmation_mode",
+    "auto_support_confirmed",
+    "auto_support_kind",
+    "auto_support_amount",
+    "auto_support_user_nick",
+    "auto_support_reg_date",
+    "views_900_plus",
+    "views_1000_plus",
+)
 REQUEST_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0 Safari/537.36"
@@ -98,8 +135,26 @@ def normalize_url(value: str) -> str:
     if not value:
         return ""
     if value.startswith("//"):
-        return f"https:{value}"
-    return value
+        value = f"https:{value}"
+    parsed = urlparse(value)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return value
+    return ""
+
+
+def select_fields(payload: Dict[str, Any], allowed_fields: Iterable[str]) -> Dict[str, Any]:
+    return {field: payload[field] for field in allowed_fields if field in payload}
+
+
+def build_public_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "page_title": snapshot.get("page_title"),
+        "page_heading": snapshot.get("page_heading"),
+        "policy_date": snapshot.get("policy_date"),
+        "generated_at": snapshot.get("generated_at"),
+        "summary": select_fields(snapshot.get("summary", {}), PUBLIC_SUMMARY_FIELDS),
+        "vods": [select_fields(vod, PUBLIC_VOD_FIELDS) for vod in snapshot.get("vods", [])],
+    }
 
 
 def load_state_cache(path: Path) -> Dict[str, Any]:
@@ -188,9 +243,6 @@ def extract_support_evidence(payload: Dict[str, Any]) -> Optional[Dict[str, Any]
             "supported": True,
             "kind": kind,
             "amount": amount,
-            "comment_no": str(node.get("p_comment_no") or node.get("comment_no") or ""),
-            "comment_preview": summarize_comment(node.get("comment")),
-            "user_id": str(node.get("user_id") or ""),
             "user_nick": str(node.get("user_nick") or ""),
             "reg_date": str(node.get("reg_date") or ""),
         }
@@ -312,12 +364,8 @@ def classify_vod(
         "auto_support_confirmed": auto_support_confirmed,
         "auto_support_kind": comment_check.get("kind"),
         "auto_support_amount": safe_int(comment_check.get("amount")),
-        "auto_support_comment_no": comment_check.get("comment_no") or None,
-        "auto_support_comment_preview": comment_check.get("comment_preview") or "",
-        "auto_support_user_id": comment_check.get("user_id") or "",
         "auto_support_user_nick": comment_check.get("user_nick") or "",
         "auto_support_reg_date": comment_check.get("reg_date") or None,
-        "auto_support_checked_at": comment_check.get("checked_at"),
         "api_auto_delete_flag": api_auto_delete_flag,
         "raw_file_type": ucc.get("file_type"),
         "raw_grade": ucc.get("grade"),
@@ -361,9 +409,8 @@ class SoopReplayMonitor:
         with self._lock:
             return json.loads(json.dumps(self._snapshot))
 
-    def trigger_refresh(self) -> None:
-        thread = threading.Thread(target=self.refresh_now, name="soop-monitor-manual-refresh", daemon=True)
-        thread.start()
+    def public_snapshot(self) -> Dict[str, Any]:
+        return build_public_snapshot(self.snapshot())
 
     def refresh_now(self) -> None:
         if not self._refresh_lock.acquire(blocking=False):
@@ -625,7 +672,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         if parsed.path == "/api/status":
-            self._send_json(self.monitor.snapshot())
+            self._send_json(self.monitor.public_snapshot())
             return
 
         if parsed.path == "/":
@@ -640,11 +687,6 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:  # noqa: N802
-        parsed = urlparse(self.path)
-        if parsed.path == "/api/refresh":
-            self.monitor.trigger_refresh()
-            self._send_json({"ok": True})
-            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
@@ -656,6 +698,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
         self.send_header("Cache-Control", "no-store")
+        self._send_security_headers()
         self.end_headers()
         self.wfile.write(encoded)
 
@@ -683,8 +726,25 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type or "application/octet-stream")
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-store")
+        self._send_security_headers()
         self.end_headers()
         self.wfile.write(content)
+
+    def _send_security_headers(self) -> None:
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "img-src 'self' https: data:; "
+            "style-src 'self'; "
+            "script-src 'self'; "
+            "connect-src 'self'; "
+            "base-uri 'none'; "
+            "frame-ancestors 'none'; "
+            "object-src 'none'",
+        )
 
 
 def build_settings() -> MonitorSettings:
