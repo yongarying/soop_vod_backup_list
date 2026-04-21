@@ -133,8 +133,8 @@ class SettingsTests(unittest.TestCase):
             settings = build_settings()
 
         self.assertEqual(settings.display_name, "테스트BJ")
-        self.assertEqual(settings.page_title, "테스트BJ 다시보기 백업")
-        self.assertEqual(settings.page_heading, "테스트BJ 다시보기 살리기 운동")
+        self.assertEqual(settings.page_title, "테스트BJ 다시보기 살리기 캠페인")
+        self.assertEqual(settings.page_heading, "테스트BJ 다시보기 살리기 캠페인")
 
     def test_custom_page_labels_can_override_defaults(self):
         with patch.dict(
@@ -161,8 +161,8 @@ class SecurityTests(unittest.TestCase):
     def test_build_public_snapshot_strips_internal_fields(self):
         snapshot = {
             "streamer_id": "kyaang123",
-            "page_title": "테스트 다시보기 백업",
-            "page_heading": "테스트 다시보기 살리기 운동",
+            "page_title": "테스트 다시보기 살리기 캠페인",
+            "page_heading": "테스트 다시보기 살리기 캠페인",
             "policy_date": "2026-06-01",
             "generated_at": "2026-04-20T12:00:00+00:00",
             "participant_ranking_start_date": "2026-04-15",

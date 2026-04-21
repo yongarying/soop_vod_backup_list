@@ -51,8 +51,8 @@ docker compose logs -f
 ```bash
 SOOP_STREAMER_ID=kyaang123
 SOOP_DISPLAY_NAME=캬앙
-SOOP_PAGE_TITLE={display_name} 다시보기 백업
-SOOP_PAGE_HEADING={display_name} 다시보기 살리기 운동
+SOOP_PAGE_TITLE={display_name} 다시보기 살리기 캠페인
+SOOP_PAGE_HEADING={display_name} 다시보기 살리기 캠페인
 SOOP_STREAMER_TIER=best
 SOOP_POLICY_DATE=2026-06-01
 SOOP_POLL_INTERVAL_SECONDS=60

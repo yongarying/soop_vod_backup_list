@@ -95,6 +95,31 @@ body {
   font-weight: 700;
 }
 
+.notice-panel {
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+}
+
+.notice-panel p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.8;
+}
+
+.notice-link {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-color: #cccccc;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+
 .toolbar {
   display: flex;
   justify-content: space-between;

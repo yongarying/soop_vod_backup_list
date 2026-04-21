@@ -84,8 +84,8 @@ function formatUploadDateTime(value) {
 }
 
 function renderHeader(snapshot) {
-  document.title = snapshot.page_title || "다시보기 백업";
-  document.getElementById("pageHeading").textContent = snapshot.page_heading || "다시보기 살리기 운동";
+  document.title = snapshot.page_title || "캬앙 다시보기 살리기 캠페인";
+  document.getElementById("pageHeading").textContent = snapshot.page_heading || "캬앙 다시보기 살리기 캠페인";
 }
 
 function policyLabel(vod) {
