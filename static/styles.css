@@ -46,6 +46,10 @@ body {
 }
 
 .hero-panel {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
   min-width: 260px;
 }
 
@@ -148,6 +152,10 @@ body {
   background: var(--surface);
 }
 
+.hidden {
+  display: none !important;
+}
+
 .table-head {
   display: flex;
   justify-content: space-between;
@@ -175,6 +183,10 @@ table {
   width: 100%;
   min-width: 1560px;
   border-collapse: collapse;
+}
+
+.ranking-table {
+  min-width: 900px;
 }
 
 thead th {
@@ -225,6 +237,10 @@ tbody td:last-child {
 
 .cell-status {
   width: 220px;
+}
+
+.cell-rank {
+  width: 90px;
 }
 
 .vod-title {
@@ -327,6 +343,7 @@ tbody td:last-child {
 
   .hero-panel {
     min-width: 0;
+    justify-content: space-between;
   }
 
   .search-box input {

@@ -13,11 +13,12 @@
           <h1 id="pageHeading">다시보기 살리기 운동</h1>
         </div>
         <div class="hero-panel">
+          <button id="rankingButton" class="button primary" type="button">참여자 랭킹</button>
           <dl id="metaPanel" class="meta-list"></dl>
         </div>
       </header>
 
-      <section class="toolbar">
+      <section id="vodToolbar" class="toolbar">
         <div id="filterBar" class="filter-bar"></div>
         <label class="search-box">
           <span>검색</span>
@@ -25,7 +26,7 @@
         </label>
       </section>
 
-      <section class="table-card">
+      <section id="vodCard" class="table-card">
         <div class="table-head">
           <h2 id="tableTitle">다시보기 목록</h2>
           <p id="tableCaption" class="table-caption"></p>
@@ -45,11 +46,37 @@
           </table>
         </div>
       </section>
+
+      <section id="rankingCard" class="table-card hidden">
+        <div class="table-head">
+          <h2>참여자 랭킹</h2>
+          <p id="rankingCaption" class="table-caption"></p>
+        </div>
+        <div class="table-wrap">
+          <table class="ranking-table">
+            <thead>
+              <tr>
+                <th>순위</th>
+                <th>닉네임</th>
+                <th>ID</th>
+                <th>총 별풍선</th>
+              </tr>
+            </thead>
+            <tbody id="rankingTableBody"></tbody>
+          </table>
+        </div>
+      </section>
     </div>
 
     <template id="emptyStateTemplate">
       <tr>
         <td colspan="5" class="empty-state">조건에 맞는 다시보기가 없습니다.</td>
+      </tr>
+    </template>
+
+    <template id="emptyRankingTemplate">
+      <tr>
+        <td colspan="4" class="empty-state">2026년 4월 15일 이후 별풍선 기록이 없습니다.</td>
       </tr>
     </template>
 

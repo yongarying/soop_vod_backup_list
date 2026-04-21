@@ -30,6 +30,8 @@ VIEW_COUNT_CHANGE_AT = datetime(2025, 1, 14, 11, 35, 0)
 DEFAULT_POLL_INTERVAL_SECONDS = 60
 DEFAULT_PAGE_TITLE = "{display_name} 다시보기 백업"
 DEFAULT_PAGE_HEADING = "{display_name} 다시보기 살리기 운동"
+COMMENT_SCAN_VERSION = 2
+PARTICIPANT_RANKING_START_AT = datetime(2026, 4, 15, 0, 0, 0)
 MAX_FETCH_WORKERS = 8
 MAX_COMMENT_SCAN_WORKERS = 4
 COMMENT_ROWS_PER_PAGE = 100
@@ -42,6 +44,11 @@ PUBLIC_SUMMARY_FIELDS = (
     "views_1000_plus",
     "future_permanent",
     "confirmed",
+)
+PUBLIC_RANKING_FIELDS = (
+    "user_nick",
+    "user_id",
+    "total_starballoons",
 )
 PUBLIC_VOD_FIELDS = (
     "title_no",
@@ -152,7 +159,11 @@ def build_public_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         "page_heading": snapshot.get("page_heading"),
         "policy_date": snapshot.get("policy_date"),
         "generated_at": snapshot.get("generated_at"),
+        "participant_ranking_start_date": snapshot.get("participant_ranking_start_date"),
         "summary": select_fields(snapshot.get("summary", {}), PUBLIC_SUMMARY_FIELDS),
+        "participant_ranking": [
+            select_fields(item, PUBLIC_RANKING_FIELDS) for item in snapshot.get("participant_ranking", [])
+        ],
         "vods": [select_fields(vod, PUBLIC_VOD_FIELDS) for vod in snapshot.get("vods", [])],
     }
 
@@ -207,11 +218,20 @@ def safe_int(value: Any) -> int:
         return 0
 
 
-def summarize_comment(value: Any, limit: int = 80) -> str:
-    text = " ".join(str(value or "").split())
-    if len(text) <= limit:
-        return text
-    return f"{text[: limit - 1].rstrip()}…"
+def parse_comment_datetime(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    candidates = (text, text[:19], text[:10])
+    for candidate in candidates:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(candidate, fmt)
+            except ValueError:
+                continue
+    return None
 
 
 def iter_json_objects(payload: Any) -> Iterable[Dict[str, Any]]:
@@ -225,14 +245,43 @@ def iter_json_objects(payload: Any) -> Iterable[Dict[str, Any]]:
             stack.extend(current)
 
 
+def is_comment_node(node: Dict[str, Any]) -> bool:
+    if "starballoon_cnt" not in node and "gift_cnt" not in node:
+        return False
+    return any(key in node for key in ("p_comment_no", "comment_no", "user_id", "user_nick", "reg_date"))
+
+
+def comment_node_key(node: Dict[str, Any]) -> str:
+    comment_no = node.get("p_comment_no") or node.get("comment_no")
+    if comment_no:
+        return f"comment:{comment_no}"
+    return "|".join(
+        [
+            str(node.get("reg_date") or ""),
+            str(node.get("user_id") or ""),
+            str(node.get("user_nick") or ""),
+            str(node.get("starballoon_cnt") or ""),
+            str(node.get("gift_cnt") or ""),
+        ]
+    )
+
+
 def extract_support_evidence(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    seen_comments: set[str] = set()
     for node in iter_json_objects(payload):
+        if not is_comment_node(node):
+            continue
+        key = comment_node_key(node)
+        if key in seen_comments:
+            continue
+        seen_comments.add(key)
+
         starballoon_cnt = safe_int(node.get("starballoon_cnt"))
         gift_cnt = safe_int(node.get("gift_cnt"))
-        if starballoon_cnt < 10 and gift_cnt < 10:
+        if starballoon_cnt != 10 and gift_cnt != 10:
             continue
 
-        if starballoon_cnt >= gift_cnt:
+        if starballoon_cnt == 10:
             kind = "starballoon"
             amount = starballoon_cnt
         else:
@@ -247,6 +296,81 @@ def extract_support_evidence(payload: Dict[str, Any]) -> Optional[Dict[str, Any]
             "reg_date": str(node.get("reg_date") or ""),
         }
     return None
+
+
+def extract_participant_starballoons(payload: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    participants: Dict[str, Dict[str, Any]] = {}
+    seen_comments: set[str] = set()
+
+    for node in iter_json_objects(payload):
+        if not is_comment_node(node):
+            continue
+
+        key = comment_node_key(node)
+        if key in seen_comments:
+            continue
+        seen_comments.add(key)
+
+        starballoon_cnt = safe_int(node.get("starballoon_cnt"))
+        if starballoon_cnt <= 0:
+            continue
+
+        reg_date = parse_comment_datetime(node.get("reg_date"))
+        if not reg_date or reg_date < PARTICIPANT_RANKING_START_AT:
+            continue
+
+        user_id = str(node.get("user_id") or "").strip()
+        user_nick = str(node.get("user_nick") or "").strip()
+        participant_key = user_id or user_nick
+        if not participant_key:
+            continue
+
+        current = participants.setdefault(
+            participant_key,
+            {
+                "user_id": user_id,
+                "user_nick": user_nick,
+                "total_starballoons": 0,
+            },
+        )
+        current["total_starballoons"] += starballoon_cnt
+        if not current.get("user_id") and user_id:
+            current["user_id"] = user_id
+        if not current.get("user_nick") and user_nick:
+            current["user_nick"] = user_nick
+
+    return participants
+
+
+def merge_participant_totals(records: Iterable[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    totals: Dict[str, Dict[str, Any]] = {}
+
+    for record in records:
+        for participant in record.get("participant_starballoons", []) or []:
+            user_id = str(participant.get("user_id") or "").strip()
+            user_nick = str(participant.get("user_nick") or "").strip()
+            key = user_id or user_nick
+            if not key:
+                continue
+
+            current = totals.setdefault(
+                key,
+                {
+                    "user_id": user_id,
+                    "user_nick": user_nick,
+                    "total_starballoons": 0,
+                },
+            )
+            current["total_starballoons"] += safe_int(participant.get("total_starballoons"))
+            if not current.get("user_id") and user_id:
+                current["user_id"] = user_id
+            if not current.get("user_nick") and user_nick:
+                current["user_nick"] = user_nick
+
+    return sorted(
+        totals.values(),
+        key=lambda item: (-safe_int(item.get("total_starballoons")), str(item.get("user_nick") or ""), str(item.get("user_id") or "")),
+    )
 
 
 def classify_vod(
@@ -388,6 +512,8 @@ class SoopReplayMonitor:
             "streamer_tier": settings.streamer_tier,
             "policy_date": settings.policy_date.isoformat(),
             "generated_at": None,
+            "participant_ranking_start_date": PARTICIPANT_RANKING_START_AT.date().isoformat(),
+            "participant_ranking": [],
             "refreshing": False,
             "error": None,
             "summary": {},
@@ -450,7 +576,7 @@ class SoopReplayMonitor:
             comment_scan_candidates = [
                 item
                 for item in raw_vods
-                if self._should_scan_comment_support(
+                if self._should_scan_comments(
                     raw_vod=item,
                     comment_checks=scanned_comment_checks,
                 )
@@ -491,6 +617,7 @@ class SoopReplayMonitor:
             )
 
             summary = self._build_summary(computed_vods)
+            participant_ranking = merge_participant_totals(scanned_comment_checks.values())
 
             with self._lock:
                 self._snapshot = {
@@ -501,6 +628,8 @@ class SoopReplayMonitor:
                     "streamer_tier": self.settings.streamer_tier,
                     "policy_date": self.settings.policy_date.isoformat(),
                     "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "participant_ranking_start_date": PARTICIPANT_RANKING_START_AT.date().isoformat(),
+                    "participant_ranking": participant_ranking,
                     "refreshing": False,
                     "error": None,
                     "summary": summary,
@@ -551,25 +680,20 @@ class SoopReplayMonitor:
         except URLError as exc:
             raise RuntimeError(f"SOOP comment API connection failed for {title_no} page {page_number}") from exc
 
-    def _should_scan_comment_support(
+    def _should_scan_comments(
         self,
         raw_vod: Dict[str, Any],
         comment_checks: Dict[str, Any],
     ) -> bool:
         title_no = str(raw_vod["title_no"])
         counts = raw_vod.get("count", {})
-        pure_views = safe_int(counts.get("vod_read_cnt"))
         comment_count = safe_int(counts.get("comment_cnt"))
         cached = comment_checks.get(title_no, {})
 
-        if cached.get("supported"):
-            return False
         if comment_count <= 0:
             return False
-        if self.settings.streamer_tier == "partner":
-            return False
-        if self.settings.streamer_tier == "best" and pure_views > 1000:
-            return False
+        if safe_int(cached.get("scan_version")) != COMMENT_SCAN_VERSION:
+            return True
         if cached.get("error"):
             return True
         if not cached.get("checked_at"):
@@ -581,6 +705,8 @@ class SoopReplayMonitor:
         comment_count = safe_int(raw_vod.get("count", {}).get("comment_cnt"))
         checked_at = datetime.now(timezone.utc).isoformat()
         scanned_pages = 0
+        support_evidence: Optional[Dict[str, Any]] = None
+        participant_totals: Dict[str, Dict[str, Any]] = {}
 
         try:
             total_pages = max(1, math.ceil(comment_count / COMMENT_ROWS_PER_PAGE))
@@ -592,26 +718,47 @@ class SoopReplayMonitor:
                 if payload_comment_count:
                     comment_count = payload_comment_count
 
-                evidence = extract_support_evidence(payload)
-                if evidence:
-                    return {
-                        "title_no": title_no,
-                        "comment_count": comment_count,
-                        "checked_at": checked_at,
-                        "pages_scanned": scanned_pages,
-                        **evidence,
-                    }
+                if not support_evidence:
+                    support_evidence = extract_support_evidence(payload)
+
+                for key, participant in extract_participant_starballoons(payload).items():
+                    current = participant_totals.setdefault(
+                        key,
+                        {
+                            "user_id": participant.get("user_id") or "",
+                            "user_nick": participant.get("user_nick") or "",
+                            "total_starballoons": 0,
+                        },
+                    )
+                    current["total_starballoons"] += safe_int(participant.get("total_starballoons"))
+                    if not current.get("user_id") and participant.get("user_id"):
+                        current["user_id"] = participant["user_id"]
+                    if not current.get("user_nick") and participant.get("user_nick"):
+                        current["user_nick"] = participant["user_nick"]
 
                 if not data.get("has_more"):
                     break
 
-            return {
+            result = {
                 "title_no": title_no,
-                "supported": False,
                 "comment_count": comment_count,
                 "checked_at": checked_at,
                 "pages_scanned": scanned_pages,
+                "scan_version": COMMENT_SCAN_VERSION,
+                "participant_starballoons": sorted(
+                    participant_totals.values(),
+                    key=lambda item: (-safe_int(item.get("total_starballoons")), str(item.get("user_nick") or ""), str(item.get("user_id") or "")),
+                ),
                 "error": "",
+            }
+            if support_evidence:
+                return {
+                    **result,
+                    **support_evidence,
+                }
+            return {
+                **result,
+                "supported": False,
             }
         except Exception as exc:  # noqa: BLE001
             return {
@@ -620,6 +767,11 @@ class SoopReplayMonitor:
                 "comment_count": comment_count,
                 "checked_at": checked_at,
                 "pages_scanned": scanned_pages,
+                "scan_version": COMMENT_SCAN_VERSION,
+                "participant_starballoons": sorted(
+                    participant_totals.values(),
+                    key=lambda item: (-safe_int(item.get("total_starballoons")), str(item.get("user_nick") or ""), str(item.get("user_id") or "")),
+                ),
                 "error": str(exc),
             }
 

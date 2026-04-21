@@ -2,6 +2,7 @@ const state = {
   snapshot: null,
   filter: "all",
   search: "",
+  view: "vods",
 };
 const POLL_INTERVAL_MS = 60000;
 
@@ -101,7 +102,7 @@ function policyReasonLabel(vod) {
     case "partner_permanent":
       return "파트너 스트리머 영구보관";
     case "pre_policy_support_confirmed":
-      return "10개 후원 영구보관 확인";
+      return "별풍선/애드벌룬 10개 영구보관 확인";
     case "best_views_over_1000":
       return "베스트 전용: 순수조회 1,000회 초과";
     case "best_basic_2_years":
@@ -117,13 +118,13 @@ function policyReasonLabel(vod) {
 function autoSupportBadgeLabel(vod) {
   if (!vod.auto_support_confirmed) return "";
   const supportName = vod.auto_support_kind === "adballoon" ? "애드벌룬" : "별풍선";
-  return `${supportName} ${number(vod.auto_support_amount || 10)} 자동확인`;
+  return `${supportName} 10개 자동확인`;
 }
 
 function autoSupportDetail(vod) {
   if (!vod.auto_support_confirmed) return "";
   const supportName = vod.auto_support_kind === "adballoon" ? "애드벌룬" : "별풍선";
-  const parts = [`${supportName} ${number(vod.auto_support_amount || 10)}`];
+  const parts = [`${supportName} 10개`];
   if (vod.auto_support_user_nick) parts.push(vod.auto_support_user_nick);
   if (vod.auto_support_reg_date) parts.push(vod.auto_support_reg_date);
   return parts.join(" · ");
@@ -145,6 +146,14 @@ function renderMeta(snapshot) {
       `
     )
     .join("");
+}
+
+function renderViewState() {
+  const isRanking = state.view === "ranking";
+  document.getElementById("rankingButton").textContent = isRanking ? "다시보기 목록" : "참여자 랭킹";
+  document.getElementById("vodToolbar").classList.toggle("hidden", isRanking);
+  document.getElementById("vodCard").classList.toggle("hidden", isRanking);
+  document.getElementById("rankingCard").classList.toggle("hidden", !isRanking);
 }
 
 function renderFilters(snapshot) {
@@ -279,12 +288,51 @@ function renderTable(snapshot) {
     .join("");
 }
 
+function renderRanking(snapshot) {
+  const ranking = [...(snapshot.participant_ranking || [])].sort(
+    (a, b) =>
+      numberValue(b.total_starballoons) - numberValue(a.total_starballoons) ||
+      String(a.user_nick || "").localeCompare(String(b.user_nick || ""), "ko-KR") ||
+      String(a.user_id || "").localeCompare(String(b.user_id || ""), "ko-KR")
+  );
+  const caption = document.getElementById("rankingCaption");
+  const body = document.getElementById("rankingTableBody");
+  const startDate = snapshot.participant_ranking_start_date || "2026-04-15";
+
+  caption.textContent = `${startDate} 이후 별풍선 합산 · ${number(ranking.length)}명`;
+
+  if (ranking.length === 0) {
+    body.innerHTML = document.getElementById("emptyRankingTemplate").innerHTML;
+    return;
+  }
+
+  body.innerHTML = ranking
+    .map(
+      (participant, index) => `
+        <tr>
+          <td class="cell-rank mono-copy">${number(index + 1)}</td>
+          <td>${escapeHtml(participant.user_nick || "-")}</td>
+          <td class="mono-copy">${escapeHtml(participant.user_id || "-")}</td>
+          <td class="mono-copy">${number(participant.total_starballoons)}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function numberValue(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function render() {
   if (!state.snapshot) return;
   renderHeader(state.snapshot);
   renderMeta(state.snapshot);
+  renderViewState();
   renderFilters(state.snapshot);
   renderTable(state.snapshot);
+  renderRanking(state.snapshot);
 }
 
 async function loadSnapshot() {
@@ -296,6 +344,11 @@ document.getElementById("filterBar").addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
   if (!button) return;
   state.filter = button.dataset.filter;
+  render();
+});
+
+document.getElementById("rankingButton").addEventListener("click", () => {
+  state.view = state.view === "ranking" ? "vods" : "ranking";
   render();
 });
 

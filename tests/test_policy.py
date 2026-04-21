@@ -2,7 +2,15 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 
-from app import build_public_snapshot, build_settings, classify_vod, normalize_url
+from app import (
+    build_public_snapshot,
+    build_settings,
+    classify_vod,
+    extract_participant_starballoons,
+    extract_support_evidence,
+    merge_participant_totals,
+    normalize_url,
+)
 
 
 def sample_vod(
@@ -157,6 +165,7 @@ class SecurityTests(unittest.TestCase):
             "page_heading": "테스트 다시보기 살리기 운동",
             "policy_date": "2026-06-01",
             "generated_at": "2026-04-20T12:00:00+00:00",
+            "participant_ranking_start_date": "2026-04-15",
             "summary": {
                 "total": 1,
                 "policy_day_delete": 0,
@@ -199,15 +208,93 @@ class SecurityTests(unittest.TestCase):
                     "raw_grade": 0,
                 }
             ],
+            "participant_ranking": [
+                {
+                    "user_nick": "후원자",
+                    "user_id": "supporter",
+                    "total_starballoons": 30,
+                    "internal_note": "hidden",
+                }
+            ],
         }
 
         public_snapshot = build_public_snapshot(snapshot)
 
         self.assertEqual(public_snapshot["summary"]["total"], 1)
+        self.assertEqual(public_snapshot["participant_ranking"][0]["user_id"], "supporter")
         self.assertNotIn("streamer_id", public_snapshot)
         self.assertNotIn("api_auto_delete", public_snapshot["summary"])
+        self.assertNotIn("internal_note", public_snapshot["participant_ranking"][0])
         self.assertNotIn("auto_support_user_id", public_snapshot["vods"][0])
         self.assertNotIn("raw_grade", public_snapshot["vods"][0])
+
+
+class CommentScanTests(unittest.TestCase):
+    def test_support_requires_exactly_10_starballoons_or_adballoons(self):
+        payload = {
+            "comments": [
+                {"comment_no": "1", "starballoon_cnt": 9, "gift_cnt": 0, "user_nick": "nine"},
+                {"comment_no": "2", "starballoon_cnt": 11, "gift_cnt": 0, "user_nick": "eleven"},
+                {"comment_no": "3", "starballoon_cnt": 0, "gift_cnt": 10, "user_nick": "ad"},
+            ]
+        }
+
+        evidence = extract_support_evidence(payload)
+
+        self.assertIsNotNone(evidence)
+        self.assertEqual(evidence["kind"], "adballoon")
+        self.assertEqual(evidence["amount"], 10)
+
+    def test_support_accepts_exactly_10_starballoons_before_larger_values(self):
+        payload = {
+            "comments": [
+                {"comment_no": "1", "starballoon_cnt": 10, "gift_cnt": 0, "user_nick": "ten"},
+                {"comment_no": "2", "starballoon_cnt": 11, "gift_cnt": 0, "user_nick": "eleven"},
+            ]
+        }
+
+        evidence = extract_support_evidence(payload)
+
+        self.assertIsNotNone(evidence)
+        self.assertEqual(evidence["kind"], "starballoon")
+        self.assertEqual(evidence["amount"], 10)
+
+    def test_participant_ranking_counts_starballoons_after_policy_announcement(self):
+        payload = {
+            "comments": [
+                {
+                    "comment_no": "1",
+                    "starballoon_cnt": 100,
+                    "gift_cnt": 0,
+                    "user_id": "old",
+                    "user_nick": "이전",
+                    "reg_date": "2026-04-14 23:59:59",
+                },
+                {
+                    "comment_no": "2",
+                    "starballoon_cnt": 20,
+                    "gift_cnt": 0,
+                    "user_id": "alice",
+                    "user_nick": "앨리스",
+                    "reg_date": "2026-04-15 00:00:00",
+                },
+                {
+                    "comment_no": "3",
+                    "starballoon_cnt": 30,
+                    "gift_cnt": 0,
+                    "user_id": "alice",
+                    "user_nick": "앨리스",
+                    "reg_date": "2026-04-16 00:00:00",
+                },
+            ]
+        }
+
+        page_totals = extract_participant_starballoons(payload)
+        ranking = merge_participant_totals([{"participant_starballoons": list(page_totals.values())}])
+
+        self.assertEqual(len(ranking), 1)
+        self.assertEqual(ranking[0]["user_id"], "alice")
+        self.assertEqual(ranking[0]["total_starballoons"], 50)
 
 
 if __name__ == "__main__":
