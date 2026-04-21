@@ -165,9 +165,23 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+.table-title-line {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
 .table-head h2 {
   margin: 0;
   font-size: 20px;
+  white-space: nowrap;
+}
+
+.table-description {
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .table-caption {

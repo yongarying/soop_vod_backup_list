@@ -15,6 +15,11 @@ const filterDefinitions = [
   { key: "confirmed", label: "별풍 확인" },
   { key: "views_900_plus", label: "순수조회 900회 이상" },
   { key: "views_1000_plus", label: "순수조회 1000회 초과" },
+  {
+    key: "support_10_plus",
+    label: "별풍/애드벌룬 10개 이상",
+    description: "별풍 or 애드벌룬 기록이 있지만 딱 10개가 아닌 10개 이상인 VOD",
+  },
 ];
 
 async function fetchJson(url, options = {}) {
@@ -130,6 +135,15 @@ function autoSupportDetail(vod) {
   return parts.join(" · ");
 }
 
+function support10PlusDetail(vod) {
+  if (!vod.support_10_plus) return "";
+  const supportName = vod.support_10_plus_kind === "adballoon" ? "애드벌룬" : "별풍선";
+  const parts = [`${supportName} ${number(vod.support_10_plus_amount)}개`];
+  if (vod.support_10_plus_user_nick) parts.push(vod.support_10_plus_user_nick);
+  if (vod.support_10_plus_reg_date) parts.push(vod.support_10_plus_reg_date);
+  return parts.join(" · ");
+}
+
 function metaRows(snapshot) {
   return [["마지막 갱신", formatDateTime(snapshot.generated_at)]];
 }
@@ -167,13 +181,14 @@ function renderFilters(snapshot) {
     confirmed: summary.confirmed || 0,
     views_900_plus: summary.views_900_plus || 0,
     views_1000_plus: summary.views_1000_plus || 0,
+    support_10_plus: summary.support_10_plus || 0,
   };
 
   document.getElementById("filterBar").innerHTML = filterDefinitions
     .map(
       (filter) => `
         <button class="filter-button ${state.filter === filter.key ? "active" : ""}" type="button" data-filter="${filter.key}">
-          <span>${filter.label}</span>
+          <span>${escapeHtml(filter.label)}</span>
           <span class="filter-count">${number(counts[filter.key])}</span>
         </button>
       `
@@ -206,6 +221,8 @@ function filteredVods(snapshot) {
         return vod.views_900_plus;
       case "views_1000_plus":
         return vod.views_1000_plus;
+      case "support_10_plus":
+        return vod.support_10_plus;
       default:
         return true;
     }
@@ -223,11 +240,13 @@ function safeThumbnailUrl(vod) {
 function renderTable(snapshot) {
   const vods = filteredVods(snapshot);
   const title = document.getElementById("tableTitle");
+  const description = document.getElementById("tableDescription");
   const caption = document.getElementById("tableCaption");
   const body = document.getElementById("vodTableBody");
 
   const activeFilter = filterDefinitions.find((item) => item.key === state.filter);
   title.textContent = activeFilter ? activeFilter.label : "전체";
+  description.textContent = activeFilter?.description || "";
   caption.textContent = `${number(vods.length)}개 / 전체 ${number(snapshot.summary.total || 0)}개`;
 
   if (vods.length === 0) {
@@ -255,6 +274,7 @@ function renderTable(snapshot) {
                   ${vod.delete_on_policy_day ? `<span class="badge danger">6월 1일 삭제</span>` : ""}
                   ${vod.views_900_plus ? `<span class="badge">순수조회 900+</span>` : ""}
                   ${vod.views_1000_plus ? `<span class="badge safe">순수조회 1000회 초과</span>` : ""}
+                  ${vod.support_10_plus ? `<span class="badge">별풍/애드벌룬 10개 이상</span>` : ""}
                   ${vod.auto_support_confirmed ? `<span class="badge safe">${escapeHtml(autoSupportBadgeLabel(vod))}</span>` : ""}
                 </div>
               </div>
@@ -281,6 +301,7 @@ function renderTable(snapshot) {
               </span>
             </div>
             ${vod.auto_support_confirmed ? `<div class="mini-copy">${escapeHtml(autoSupportDetail(vod))}</div>` : ""}
+            ${vod.support_10_plus ? `<div class="mini-copy">${escapeHtml(support10PlusDetail(vod))}</div>` : ""}
           </td>
         </tr>
       `
