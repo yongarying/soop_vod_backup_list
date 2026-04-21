@@ -73,6 +73,7 @@ PUBLIC_VOD_FIELDS = (
     "auto_support_kind",
     "auto_support_amount",
     "auto_support_user_nick",
+    "auto_support_user_id",
     "auto_support_reg_date",
     "views_900_plus",
     "views_1000_plus",
@@ -293,6 +294,7 @@ def extract_support_evidence(payload: Dict[str, Any]) -> Optional[Dict[str, Any]
             "kind": kind,
             "amount": amount,
             "user_nick": str(node.get("user_nick") or ""),
+            "user_id": str(node.get("user_id") or ""),
             "reg_date": str(node.get("reg_date") or ""),
         }
     return None
@@ -496,6 +498,7 @@ def classify_vod(
         "auto_support_kind": comment_check.get("kind"),
         "auto_support_amount": safe_int(comment_check.get("amount")),
         "auto_support_user_nick": comment_check.get("user_nick") or "",
+        "auto_support_user_id": comment_check.get("user_id") or "",
         "auto_support_reg_date": comment_check.get("reg_date") or None,
         "api_auto_delete_flag": api_auto_delete_flag,
         "raw_file_type": ucc.get("file_type"),

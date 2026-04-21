@@ -183,7 +183,7 @@ body {
 
 table {
   width: 100%;
-  min-width: 1560px;
+  min-width: 1360px;
   border-collapse: collapse;
 }
 
@@ -216,8 +216,7 @@ tbody td:last-child {
 }
 
 .cell-upload,
-.cell-policy,
-.cell-status {
+.cell-policy {
   white-space: nowrap;
 }
 
@@ -234,11 +233,7 @@ tbody td:last-child {
 }
 
 .cell-policy {
-  width: 220px;
-}
-
-.cell-status {
-  width: 220px;
+  width: 300px;
 }
 
 .cell-rank {
@@ -325,6 +320,49 @@ tbody td:last-child {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.4;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.pagination-top {
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pagination-button {
+  min-width: 38px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--text);
+  padding: 7px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pagination-button:disabled {
+  color: #888888;
+  cursor: not-allowed;
+}
+
+.pagination-button.active {
+  background: #111111;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.pagination-current {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  background: #f7f7f7;
+  font-weight: 700;
 }
 
 .policy-text {

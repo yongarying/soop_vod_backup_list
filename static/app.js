@@ -3,8 +3,11 @@ const state = {
   filter: "all",
   search: "",
   view: "vods",
+  page: 1,
 };
 const POLL_INTERVAL_MS = 60000;
+const PAGE_SIZE = 30;
+const PAGE_BUTTON_COUNT = 10;
 
 const filterDefinitions = [
   { key: "all", label: "전체" },
@@ -80,11 +83,6 @@ function formatUploadDateTime(value) {
   return value.replace("T", " ");
 }
 
-function statusLabel(vod) {
-  if (vod.auto_support_confirmed) return "별풍 확인";
-  return "미확인";
-}
-
 function renderHeader(snapshot) {
   document.title = snapshot.page_title || "다시보기 백업";
   document.getElementById("pageHeading").textContent = snapshot.page_heading || "다시보기 살리기 운동";
@@ -102,9 +100,9 @@ function policyReasonLabel(vod) {
     case "partner_permanent":
       return "파트너 스트리머 영구보관";
     case "pre_policy_support_confirmed":
-      return "별풍선/애드벌룬 10개 이상 영구보관 확인";
+      return "";
     case "best_views_over_1000":
-      return "베스트 전용: 순수조회 1,000회 초과";
+      return "";
     case "best_basic_2_years":
       return "";
     case "general_views_50_plus_1_year":
@@ -115,19 +113,24 @@ function policyReasonLabel(vod) {
   }
 }
 
-function autoSupportBadgeLabel(vod) {
-  if (!vod.auto_support_confirmed) return "";
-  const supportName = vod.auto_support_kind === "adballoon" ? "애드벌룬" : "별풍선";
-  return `${supportName} ${number(vod.auto_support_amount)}개 자동확인`;
+function viewPermanentReasonLabel(vod) {
+  if (vod.views_1000_plus) {
+    return "베스트 스트리머 조회수 1000회 초과";
+  }
+  return "";
 }
 
 function autoSupportDetail(vod) {
   if (!vod.auto_support_confirmed) return "";
   const supportName = vod.auto_support_kind === "adballoon" ? "애드벌룬" : "별풍선";
-  const parts = [`${supportName} ${number(vod.auto_support_amount)}개`];
-  if (vod.auto_support_user_nick) parts.push(vod.auto_support_user_nick);
-  if (vod.auto_support_reg_date) parts.push(vod.auto_support_reg_date);
-  return parts.join(" · ");
+  const nick = String(vod.auto_support_user_nick || "").trim();
+  const userId = String(vod.auto_support_user_id || "").trim();
+  const actor = nick && userId ? `${nick}(${userId})` : nick || (userId ? `(${userId})` : "후원자");
+  return `${actor} ${supportName} ${number(vod.auto_support_amount)}개 확인`;
+}
+
+function policyDetailLines(vod) {
+  return [autoSupportDetail(vod), viewPermanentReasonLabel(vod), policyReasonLabel(vod)].filter(Boolean);
 }
 
 function metaRows(snapshot) {
@@ -225,19 +228,33 @@ function renderTable(snapshot) {
   const title = document.getElementById("tableTitle");
   const caption = document.getElementById("tableCaption");
   const body = document.getElementById("vodTableBody");
+  const totalPages = Math.max(1, Math.ceil(vods.length / PAGE_SIZE));
+
+  if (state.page > totalPages) state.page = totalPages;
+  if (state.page < 1) state.page = 1;
+
+  const startIndex = (state.page - 1) * PAGE_SIZE;
+  const pageVods = vods.slice(startIndex, startIndex + PAGE_SIZE);
+  const pageStart = vods.length ? startIndex + 1 : 0;
+  const pageEnd = startIndex + pageVods.length;
 
   const activeFilter = filterDefinitions.find((item) => item.key === state.filter);
   title.textContent = activeFilter ? activeFilter.label : "전체";
-  caption.textContent = `${number(vods.length)}개 / 전체 ${number(snapshot.summary.total || 0)}개`;
+  caption.textContent = `${number(pageStart)}-${number(pageEnd)}개 표시 / 조건 ${number(vods.length)}개 / 전체 ${number(
+    snapshot.summary.total || 0
+  )}개`;
+  renderPagination(vods.length, totalPages);
 
   if (vods.length === 0) {
     body.innerHTML = document.getElementById("emptyStateTemplate").innerHTML;
     return;
   }
 
-  body.innerHTML = vods
+  body.innerHTML = pageVods
     .map(
-      (vod) => `
+      (vod) => {
+        const policyDetails = policyDetailLines(vod);
+        return `
         <tr>
           <td class="cell-upload">
             <div class="mono-copy">${escapeHtml(formatUploadDateTime(vod.uploaded_at))}</div>
@@ -255,7 +272,6 @@ function renderTable(snapshot) {
                   ${vod.delete_on_policy_day ? `<span class="badge danger">6월 1일 삭제</span>` : ""}
                   ${vod.views_900_plus ? `<span class="badge">순수조회 900+</span>` : ""}
                   ${vod.views_1000_plus ? `<span class="badge safe">순수조회 1000회 초과</span>` : ""}
-                  ${vod.auto_support_confirmed ? `<span class="badge safe">${escapeHtml(autoSupportBadgeLabel(vod))}</span>` : ""}
                 </div>
               </div>
             </div>
@@ -272,20 +288,48 @@ function renderTable(snapshot) {
             <div class="status-stack">
               <span class="badge ${vod.future_permanent ? "safe" : "danger"}">${escapeHtml(policyLabel(vod))}</span>
             </div>
-            ${policyReasonLabel(vod) ? `<div class="mini-copy">${escapeHtml(policyReasonLabel(vod))}</div>` : ""}
-          </td>
-          <td class="cell-status">
-            <div class="status-stack">
-              <span class="badge ${vod.support_confirmation_mode === "auto" ? "safe" : ""}">
-                ${escapeHtml(statusLabel(vod))}
-              </span>
-            </div>
-            ${vod.auto_support_confirmed ? `<div class="mini-copy">${escapeHtml(autoSupportDetail(vod))}</div>` : ""}
+            ${policyDetails.map((line) => `<div class="mini-copy">${escapeHtml(line)}</div>`).join("")}
           </td>
         </tr>
-      `
+      `;
+      }
     )
     .join("");
+}
+
+function renderPagination(totalItems, totalPages) {
+  const containers = [document.getElementById("paginationTop"), document.getElementById("paginationBottom")].filter(Boolean);
+  if (!containers.length) return;
+  if (totalItems <= PAGE_SIZE) {
+    containers.forEach((container) => {
+      container.innerHTML = "";
+    });
+    return;
+  }
+
+  const pageGroupStart = Math.floor((state.page - 1) / PAGE_BUTTON_COUNT) * PAGE_BUTTON_COUNT + 1;
+  const pageGroupEnd = Math.min(pageGroupStart + PAGE_BUTTON_COUNT - 1, totalPages);
+  const pageButtons = [];
+  for (let page = pageGroupStart; page <= pageGroupEnd; page += 1) {
+    pageButtons.push(`
+      <button class="pagination-button ${page === state.page ? "active" : ""}" type="button" data-page="${page}">
+        ${number(page)}
+      </button>
+    `);
+  }
+
+  const markup = `
+    <button class="pagination-button" type="button" data-page="first" ${state.page <= 1 ? "disabled" : ""}>처음</button>
+    <button class="pagination-button" type="button" data-page="prev" ${state.page <= 1 ? "disabled" : ""}>&lt;</button>
+    ${pageButtons.join("")}
+    <button class="pagination-button" type="button" data-page="next" ${state.page >= totalPages ? "disabled" : ""}>&gt;</button>
+    <button class="pagination-button" type="button" data-page="last" ${state.page >= totalPages ? "disabled" : ""}>끝</button>
+    <span class="pagination-current">${number(state.page)} / ${number(totalPages)}</span>
+  `;
+
+  containers.forEach((container) => {
+    container.innerHTML = markup;
+  });
 }
 
 function renderRanking(snapshot) {
@@ -344,6 +388,7 @@ document.getElementById("filterBar").addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
   if (!button) return;
   state.filter = button.dataset.filter;
+  state.page = 1;
   render();
 });
 
@@ -354,6 +399,38 @@ document.getElementById("rankingButton").addEventListener("click", () => {
 
 document.getElementById("searchInput").addEventListener("input", (event) => {
   state.search = event.target.value || "";
+  state.page = 1;
+  render();
+});
+
+document.getElementById("vodCard").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-page]");
+  if (!button || button.disabled || !state.snapshot) return;
+  const totalPages = Math.max(1, Math.ceil(filteredVods(state.snapshot).length / PAGE_SIZE));
+
+  const targetPage = Number(button.dataset.page);
+  if (Number.isInteger(targetPage) && targetPage >= 1) {
+    state.page = Math.min(totalPages, targetPage);
+    render();
+    return;
+  }
+
+  switch (button.dataset.page) {
+    case "first":
+      state.page = 1;
+      break;
+    case "prev":
+      state.page = Math.max(1, state.page - 1);
+      break;
+    case "next":
+      state.page = Math.min(totalPages, state.page + 1);
+      break;
+    case "last":
+      state.page = totalPages;
+      break;
+    default:
+      break;
+  }
   render();
 });
 

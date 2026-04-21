@@ -31,6 +31,7 @@
           <h2 id="tableTitle">다시보기 목록</h2>
           <p id="tableCaption" class="table-caption"></p>
         </div>
+        <div id="paginationTop" class="pagination pagination-top"></div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -39,12 +40,12 @@
                 <th>다시보기</th>
                 <th>조회수</th>
                 <th>분류</th>
-                <th>확인 상태</th>
               </tr>
             </thead>
             <tbody id="vodTableBody"></tbody>
           </table>
         </div>
+        <div id="paginationBottom" class="pagination"></div>
       </section>
 
       <section id="rankingCard" class="table-card hidden">
@@ -70,7 +71,7 @@
 
     <template id="emptyStateTemplate">
       <tr>
-        <td colspan="5" class="empty-state">조건에 맞는 다시보기가 없습니다.</td>
+        <td colspan="4" class="empty-state">조건에 맞는 다시보기가 없습니다.</td>
       </tr>
     </template>
 

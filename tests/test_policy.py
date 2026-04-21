@@ -225,7 +225,7 @@ class SecurityTests(unittest.TestCase):
         self.assertNotIn("streamer_id", public_snapshot)
         self.assertNotIn("api_auto_delete", public_snapshot["summary"])
         self.assertNotIn("internal_note", public_snapshot["participant_ranking"][0])
-        self.assertNotIn("auto_support_user_id", public_snapshot["vods"][0])
+        self.assertEqual(public_snapshot["vods"][0]["auto_support_user_id"], "secret")
         self.assertNotIn("raw_grade", public_snapshot["vods"][0])
 
 
@@ -235,7 +235,7 @@ class CommentScanTests(unittest.TestCase):
             "comments": [
                 {"comment_no": "1", "starballoon_cnt": 9, "gift_cnt": 0, "user_nick": "nine"},
                 {"comment_no": "2", "starballoon_cnt": 0, "gift_cnt": 10, "user_nick": "ad"},
-                {"comment_no": "3", "starballoon_cnt": 11, "gift_cnt": 0, "user_nick": "eleven"},
+                {"comment_no": "3", "starballoon_cnt": 11, "gift_cnt": 0, "user_nick": "eleven", "user_id": "eleven_id"},
             ]
         }
 
@@ -244,6 +244,7 @@ class CommentScanTests(unittest.TestCase):
         self.assertIsNotNone(evidence)
         self.assertEqual(evidence["kind"], "starballoon")
         self.assertEqual(evidence["amount"], 11)
+        self.assertEqual(evidence["user_id"], "eleven_id")
 
     def test_support_rejects_less_than_10_starballoons_and_adballoons(self):
         payload = {
