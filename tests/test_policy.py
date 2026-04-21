@@ -296,6 +296,34 @@ class CommentScanTests(unittest.TestCase):
         self.assertEqual(ranking[0]["user_id"], "alice")
         self.assertEqual(ranking[0]["total_starballoons"], 50)
 
+    def test_participant_ranking_uses_latest_starballoon_comment_nickname(self):
+        payload = {
+            "comments": [
+                {
+                    "comment_no": "1",
+                    "starballoon_cnt": 20,
+                    "gift_cnt": 0,
+                    "user_id": "alice",
+                    "user_nick": "예전닉",
+                    "reg_date": "2026-04-15 00:00:00",
+                },
+                {
+                    "comment_no": "2",
+                    "starballoon_cnt": 30,
+                    "gift_cnt": 0,
+                    "user_id": "alice",
+                    "user_nick": "최신닉",
+                    "reg_date": "2026-04-16 00:00:00",
+                },
+            ]
+        }
+
+        page_totals = extract_participant_starballoons(payload)
+        ranking = merge_participant_totals([{"participant_starballoons": list(page_totals.values())}])
+
+        self.assertEqual(ranking[0]["user_nick"], "최신닉")
+        self.assertEqual(ranking[0]["total_starballoons"], 50)
+
 
 if __name__ == "__main__":
     unittest.main()

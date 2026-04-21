@@ -30,7 +30,7 @@ VIEW_COUNT_CHANGE_AT = datetime(2025, 1, 14, 11, 35, 0)
 DEFAULT_POLL_INTERVAL_SECONDS = 60
 DEFAULT_PAGE_TITLE = "{display_name} 다시보기 백업"
 DEFAULT_PAGE_HEADING = "{display_name} 다시보기 살리기 운동"
-COMMENT_SCAN_VERSION = 2
+COMMENT_SCAN_VERSION = 3
 PARTICIPANT_RANKING_START_AT = datetime(2026, 4, 15, 0, 0, 0)
 MAX_FETCH_WORKERS = 8
 MAX_COMMENT_SCAN_WORKERS = 4
@@ -330,14 +330,17 @@ def extract_participant_starballoons(payload: Dict[str, Any]) -> Dict[str, Dict[
             {
                 "user_id": user_id,
                 "user_nick": user_nick,
+                "latest_starballoon_at": reg_date.isoformat(),
                 "total_starballoons": 0,
             },
         )
         current["total_starballoons"] += starballoon_cnt
+        current_latest_at = parse_comment_datetime(current.get("latest_starballoon_at"))
+        if user_nick and (not current_latest_at or reg_date >= current_latest_at):
+            current["user_nick"] = user_nick
+            current["latest_starballoon_at"] = reg_date.isoformat()
         if not current.get("user_id") and user_id:
             current["user_id"] = user_id
-        if not current.get("user_nick") and user_nick:
-            current["user_nick"] = user_nick
 
     return participants
 
@@ -358,14 +361,18 @@ def merge_participant_totals(records: Iterable[Dict[str, Any]]) -> list[Dict[str
                 {
                     "user_id": user_id,
                     "user_nick": user_nick,
+                    "latest_starballoon_at": participant.get("latest_starballoon_at") or "",
                     "total_starballoons": 0,
                 },
             )
             current["total_starballoons"] += safe_int(participant.get("total_starballoons"))
+            participant_latest_at = parse_comment_datetime(participant.get("latest_starballoon_at"))
+            current_latest_at = parse_comment_datetime(current.get("latest_starballoon_at"))
+            if user_nick and participant_latest_at and (not current_latest_at or participant_latest_at >= current_latest_at):
+                current["user_nick"] = user_nick
+                current["latest_starballoon_at"] = participant_latest_at.isoformat()
             if not current.get("user_id") and user_id:
                 current["user_id"] = user_id
-            if not current.get("user_nick") and user_nick:
-                current["user_nick"] = user_nick
 
     return sorted(
         totals.values(),
@@ -727,14 +734,22 @@ class SoopReplayMonitor:
                         {
                             "user_id": participant.get("user_id") or "",
                             "user_nick": participant.get("user_nick") or "",
+                            "latest_starballoon_at": participant.get("latest_starballoon_at") or "",
                             "total_starballoons": 0,
                         },
                     )
                     current["total_starballoons"] += safe_int(participant.get("total_starballoons"))
+                    participant_latest_at = parse_comment_datetime(participant.get("latest_starballoon_at"))
+                    current_latest_at = parse_comment_datetime(current.get("latest_starballoon_at"))
+                    if (
+                        participant.get("user_nick")
+                        and participant_latest_at
+                        and (not current_latest_at or participant_latest_at >= current_latest_at)
+                    ):
+                        current["user_nick"] = participant["user_nick"]
+                        current["latest_starballoon_at"] = participant_latest_at.isoformat()
                     if not current.get("user_id") and participant.get("user_id"):
                         current["user_id"] = participant["user_id"]
-                    if not current.get("user_nick") and participant.get("user_nick"):
-                        current["user_nick"] = participant["user_nick"]
 
                 if not data.get("has_more"):
                     break
