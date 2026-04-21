@@ -7,7 +7,6 @@ from app import (
     build_settings,
     classify_vod,
     extract_participant_starballoons,
-    extract_support_10_plus_evidence,
     extract_support_evidence,
     merge_participant_totals,
     normalize_url,
@@ -174,7 +173,6 @@ class SecurityTests(unittest.TestCase):
                 "other_count": 0,
                 "views_900_plus": 1,
                 "views_1000_plus": 1,
-                "support_10_plus": 1,
                 "future_permanent": 1,
                 "confirmed": 0,
                 "api_auto_delete": 1,
@@ -206,11 +204,6 @@ class SecurityTests(unittest.TestCase):
                     "auto_support_reg_date": None,
                     "views_900_plus": True,
                     "views_1000_plus": True,
-                    "support_10_plus": True,
-                    "support_10_plus_kind": "adballoon",
-                    "support_10_plus_amount": 20,
-                    "support_10_plus_user_nick": "후원자",
-                    "support_10_plus_reg_date": "2026-04-20 12:00:00",
                     "auto_support_user_id": "secret",
                     "raw_grade": 0,
                 }
@@ -228,10 +221,7 @@ class SecurityTests(unittest.TestCase):
         public_snapshot = build_public_snapshot(snapshot)
 
         self.assertEqual(public_snapshot["summary"]["total"], 1)
-        self.assertEqual(public_snapshot["summary"]["support_10_plus"], 1)
         self.assertEqual(public_snapshot["participant_ranking"][0]["user_id"], "supporter")
-        self.assertTrue(public_snapshot["vods"][0]["support_10_plus"])
-        self.assertEqual(public_snapshot["vods"][0]["support_10_plus_kind"], "adballoon")
         self.assertNotIn("streamer_id", public_snapshot)
         self.assertNotIn("api_auto_delete", public_snapshot["summary"])
         self.assertNotIn("internal_note", public_snapshot["participant_ranking"][0])
@@ -240,26 +230,12 @@ class SecurityTests(unittest.TestCase):
 
 
 class CommentScanTests(unittest.TestCase):
-    def test_support_requires_exactly_10_starballoons_or_adballoons(self):
+    def test_support_accepts_10_or_more_starballoons_or_adballoons(self):
         payload = {
             "comments": [
                 {"comment_no": "1", "starballoon_cnt": 9, "gift_cnt": 0, "user_nick": "nine"},
-                {"comment_no": "2", "starballoon_cnt": 11, "gift_cnt": 0, "user_nick": "eleven"},
-                {"comment_no": "3", "starballoon_cnt": 0, "gift_cnt": 10, "user_nick": "ad"},
-            ]
-        }
-
-        evidence = extract_support_evidence(payload)
-
-        self.assertIsNotNone(evidence)
-        self.assertEqual(evidence["kind"], "adballoon")
-        self.assertEqual(evidence["amount"], 10)
-
-    def test_support_accepts_exactly_10_starballoons_before_larger_values(self):
-        payload = {
-            "comments": [
-                {"comment_no": "1", "starballoon_cnt": 10, "gift_cnt": 0, "user_nick": "ten"},
-                {"comment_no": "2", "starballoon_cnt": 11, "gift_cnt": 0, "user_nick": "eleven"},
+                {"comment_no": "2", "starballoon_cnt": 0, "gift_cnt": 10, "user_nick": "ad"},
+                {"comment_no": "3", "starballoon_cnt": 11, "gift_cnt": 0, "user_nick": "eleven"},
             ]
         }
 
@@ -267,32 +243,17 @@ class CommentScanTests(unittest.TestCase):
 
         self.assertIsNotNone(evidence)
         self.assertEqual(evidence["kind"], "starballoon")
-        self.assertEqual(evidence["amount"], 10)
+        self.assertEqual(evidence["amount"], 11)
 
-    def test_support_10_plus_section_tracks_non_exact_starballoons_and_adballoons(self):
+    def test_support_rejects_less_than_10_starballoons_and_adballoons(self):
         payload = {
             "comments": [
-                {"comment_no": "1", "starballoon_cnt": 10, "gift_cnt": 0, "user_nick": "exact"},
-                {"comment_no": "2", "starballoon_cnt": 0, "gift_cnt": 12, "user_nick": "ad"},
-                {"comment_no": "3", "starballoon_cnt": 15, "gift_cnt": 0, "user_nick": "star"},
+                {"comment_no": "1", "starballoon_cnt": 9, "gift_cnt": 0, "user_nick": "star"},
+                {"comment_no": "2", "starballoon_cnt": 0, "gift_cnt": 9, "user_nick": "ad"},
             ]
         }
 
-        evidence = extract_support_10_plus_evidence(payload)
-
-        self.assertIsNotNone(evidence)
-        self.assertEqual(evidence["support_10_plus_kind"], "starballoon")
-        self.assertEqual(evidence["support_10_plus_amount"], 15)
-
-    def test_support_10_plus_section_excludes_exact_10_only_comments(self):
-        payload = {
-            "comments": [
-                {"comment_no": "1", "starballoon_cnt": 10, "gift_cnt": 0, "user_nick": "star"},
-                {"comment_no": "2", "starballoon_cnt": 0, "gift_cnt": 10, "user_nick": "ad"},
-            ]
-        }
-
-        evidence = extract_support_10_plus_evidence(payload)
+        evidence = extract_support_evidence(payload)
 
         self.assertIsNone(evidence)
 

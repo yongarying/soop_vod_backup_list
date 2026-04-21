@@ -30,7 +30,7 @@ VIEW_COUNT_CHANGE_AT = datetime(2025, 1, 14, 11, 35, 0)
 DEFAULT_POLL_INTERVAL_SECONDS = 60
 DEFAULT_PAGE_TITLE = "{display_name} 다시보기 백업"
 DEFAULT_PAGE_HEADING = "{display_name} 다시보기 살리기 운동"
-COMMENT_SCAN_VERSION = 4
+COMMENT_SCAN_VERSION = 5
 PARTICIPANT_RANKING_START_AT = datetime(2026, 4, 15, 0, 0, 0)
 MAX_FETCH_WORKERS = 8
 MAX_COMMENT_SCAN_WORKERS = 4
@@ -42,7 +42,6 @@ PUBLIC_SUMMARY_FIELDS = (
     "other_count",
     "views_900_plus",
     "views_1000_plus",
-    "support_10_plus",
     "future_permanent",
     "confirmed",
 )
@@ -77,11 +76,6 @@ PUBLIC_VOD_FIELDS = (
     "auto_support_reg_date",
     "views_900_plus",
     "views_1000_plus",
-    "support_10_plus",
-    "support_10_plus_kind",
-    "support_10_plus_amount",
-    "support_10_plus_user_nick",
-    "support_10_plus_reg_date",
 )
 REQUEST_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -284,10 +278,10 @@ def extract_support_evidence(payload: Dict[str, Any]) -> Optional[Dict[str, Any]
 
         starballoon_cnt = safe_int(node.get("starballoon_cnt"))
         gift_cnt = safe_int(node.get("gift_cnt"))
-        if starballoon_cnt != 10 and gift_cnt != 10:
+        if starballoon_cnt < 10 and gift_cnt < 10:
             continue
 
-        if starballoon_cnt == 10:
+        if starballoon_cnt >= 10:
             kind = "starballoon"
             amount = starballoon_cnt
         else:
@@ -302,43 +296,6 @@ def extract_support_evidence(payload: Dict[str, Any]) -> Optional[Dict[str, Any]
             "reg_date": str(node.get("reg_date") or ""),
         }
     return None
-
-
-def extract_support_10_plus_evidence(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    seen_comments: set[str] = set()
-    best_evidence: Optional[Dict[str, Any]] = None
-
-    for node in iter_json_objects(payload):
-        if not is_comment_node(node):
-            continue
-        key = comment_node_key(node)
-        if key in seen_comments:
-            continue
-        seen_comments.add(key)
-
-        starballoon_cnt = safe_int(node.get("starballoon_cnt"))
-        gift_cnt = safe_int(node.get("gift_cnt"))
-        candidates = []
-        if starballoon_cnt > 10:
-            candidates.append(("starballoon", starballoon_cnt))
-        if gift_cnt > 10:
-            candidates.append(("adballoon", gift_cnt))
-        if not candidates:
-            continue
-
-        kind, amount = max(candidates, key=lambda item: item[1])
-        if best_evidence and amount <= safe_int(best_evidence.get("support_10_plus_amount")):
-            continue
-
-        best_evidence = {
-            "support_10_plus": True,
-            "support_10_plus_kind": kind,
-            "support_10_plus_amount": amount,
-            "support_10_plus_user_nick": str(node.get("user_nick") or ""),
-            "support_10_plus_reg_date": str(node.get("reg_date") or ""),
-        }
-
-    return best_evidence
 
 
 def extract_participant_starballoons(payload: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -446,7 +403,6 @@ def classify_vod(
     estimated_live_views = max(display_views - pure_views, 0) if merged_view_count_applies else 0
     comment_check = comment_check or {}
     auto_support_confirmed = bool(comment_check.get("supported"))
-    support_10_plus = bool(comment_check.get("support_10_plus"))
     support_confirmation_mode = "auto" if auto_support_confirmed else "none"
     support_confirmed = auto_support_confirmed
 
@@ -541,11 +497,6 @@ def classify_vod(
         "auto_support_amount": safe_int(comment_check.get("amount")),
         "auto_support_user_nick": comment_check.get("user_nick") or "",
         "auto_support_reg_date": comment_check.get("reg_date") or None,
-        "support_10_plus": support_10_plus,
-        "support_10_plus_kind": comment_check.get("support_10_plus_kind") or "",
-        "support_10_plus_amount": safe_int(comment_check.get("support_10_plus_amount")),
-        "support_10_plus_user_nick": comment_check.get("support_10_plus_user_nick") or "",
-        "support_10_plus_reg_date": comment_check.get("support_10_plus_reg_date") or None,
         "api_auto_delete_flag": api_auto_delete_flag,
         "raw_file_type": ucc.get("file_type"),
         "raw_grade": ucc.get("grade"),
@@ -762,7 +713,6 @@ class SoopReplayMonitor:
         checked_at = datetime.now(timezone.utc).isoformat()
         scanned_pages = 0
         support_evidence: Optional[Dict[str, Any]] = None
-        support_10_plus_evidence: Optional[Dict[str, Any]] = None
         participant_totals: Dict[str, Dict[str, Any]] = {}
 
         try:
@@ -777,14 +727,6 @@ class SoopReplayMonitor:
 
                 if not support_evidence:
                     support_evidence = extract_support_evidence(payload)
-
-                page_support_10_plus = extract_support_10_plus_evidence(payload)
-                if page_support_10_plus and (
-                    not support_10_plus_evidence
-                    or safe_int(page_support_10_plus.get("support_10_plus_amount"))
-                    > safe_int(support_10_plus_evidence.get("support_10_plus_amount"))
-                ):
-                    support_10_plus_evidence = page_support_10_plus
 
                 for key, participant in extract_participant_starballoons(payload).items():
                     current = participant_totals.setdefault(
@@ -827,12 +769,10 @@ class SoopReplayMonitor:
             if support_evidence:
                 return {
                     **result,
-                    **(support_10_plus_evidence or {"support_10_plus": False}),
                     **support_evidence,
                 }
             return {
                 **result,
-                **(support_10_plus_evidence or {"support_10_plus": False}),
                 "supported": False,
             }
         except Exception as exc:  # noqa: BLE001
@@ -843,11 +783,6 @@ class SoopReplayMonitor:
                 "checked_at": checked_at,
                 "pages_scanned": scanned_pages,
                 "scan_version": COMMENT_SCAN_VERSION,
-                "support_10_plus": bool(support_10_plus_evidence),
-                "support_10_plus_kind": (support_10_plus_evidence or {}).get("support_10_plus_kind") or "",
-                "support_10_plus_amount": safe_int((support_10_plus_evidence or {}).get("support_10_plus_amount")),
-                "support_10_plus_user_nick": (support_10_plus_evidence or {}).get("support_10_plus_user_nick") or "",
-                "support_10_plus_reg_date": (support_10_plus_evidence or {}).get("support_10_plus_reg_date"),
                 "participant_starballoons": sorted(
                     participant_totals.values(),
                     key=lambda item: (-safe_int(item.get("total_starballoons")), str(item.get("user_nick") or ""), str(item.get("user_id") or "")),
@@ -864,7 +799,6 @@ class SoopReplayMonitor:
             "other_count": 0,
             "views_900_plus": 0,
             "views_1000_plus": 0,
-            "support_10_plus": 0,
             "later_delete": 0,
             "future_permanent": 0,
             "confirmed": 0,
@@ -879,8 +813,6 @@ class SoopReplayMonitor:
                 summary["views_900_plus"] += 1
             if vod["views_1000_plus"]:
                 summary["views_1000_plus"] += 1
-            if vod["support_10_plus"]:
-                summary["support_10_plus"] += 1
 
             if vod["support_confirmed"]:
                 summary["confirmed"] += 1

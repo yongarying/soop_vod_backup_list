@@ -15,11 +15,6 @@ const filterDefinitions = [
   { key: "confirmed", label: "별풍 확인" },
   { key: "views_900_plus", label: "순수조회 900회 이상" },
   { key: "views_1000_plus", label: "순수조회 1000회 초과" },
-  {
-    key: "support_10_plus",
-    label: "별풍/애드벌룬 10개 이상",
-    description: "별풍 or 애드벌룬 기록이 있지만 딱 10개가 아닌 10개 이상인 VOD",
-  },
 ];
 
 async function fetchJson(url, options = {}) {
@@ -107,7 +102,7 @@ function policyReasonLabel(vod) {
     case "partner_permanent":
       return "파트너 스트리머 영구보관";
     case "pre_policy_support_confirmed":
-      return "별풍선/애드벌룬 10개 영구보관 확인";
+      return "별풍선/애드벌룬 10개 이상 영구보관 확인";
     case "best_views_over_1000":
       return "베스트 전용: 순수조회 1,000회 초과";
     case "best_basic_2_years":
@@ -123,24 +118,15 @@ function policyReasonLabel(vod) {
 function autoSupportBadgeLabel(vod) {
   if (!vod.auto_support_confirmed) return "";
   const supportName = vod.auto_support_kind === "adballoon" ? "애드벌룬" : "별풍선";
-  return `${supportName} 10개 자동확인`;
+  return `${supportName} ${number(vod.auto_support_amount)}개 자동확인`;
 }
 
 function autoSupportDetail(vod) {
   if (!vod.auto_support_confirmed) return "";
   const supportName = vod.auto_support_kind === "adballoon" ? "애드벌룬" : "별풍선";
-  const parts = [`${supportName} 10개`];
+  const parts = [`${supportName} ${number(vod.auto_support_amount)}개`];
   if (vod.auto_support_user_nick) parts.push(vod.auto_support_user_nick);
   if (vod.auto_support_reg_date) parts.push(vod.auto_support_reg_date);
-  return parts.join(" · ");
-}
-
-function support10PlusDetail(vod) {
-  if (!vod.support_10_plus) return "";
-  const supportName = vod.support_10_plus_kind === "adballoon" ? "애드벌룬" : "별풍선";
-  const parts = [`${supportName} ${number(vod.support_10_plus_amount)}개`];
-  if (vod.support_10_plus_user_nick) parts.push(vod.support_10_plus_user_nick);
-  if (vod.support_10_plus_reg_date) parts.push(vod.support_10_plus_reg_date);
   return parts.join(" · ");
 }
 
@@ -181,7 +167,6 @@ function renderFilters(snapshot) {
     confirmed: summary.confirmed || 0,
     views_900_plus: summary.views_900_plus || 0,
     views_1000_plus: summary.views_1000_plus || 0,
-    support_10_plus: summary.support_10_plus || 0,
   };
 
   document.getElementById("filterBar").innerHTML = filterDefinitions
@@ -221,8 +206,6 @@ function filteredVods(snapshot) {
         return vod.views_900_plus;
       case "views_1000_plus":
         return vod.views_1000_plus;
-      case "support_10_plus":
-        return vod.support_10_plus;
       default:
         return true;
     }
@@ -240,13 +223,11 @@ function safeThumbnailUrl(vod) {
 function renderTable(snapshot) {
   const vods = filteredVods(snapshot);
   const title = document.getElementById("tableTitle");
-  const description = document.getElementById("tableDescription");
   const caption = document.getElementById("tableCaption");
   const body = document.getElementById("vodTableBody");
 
   const activeFilter = filterDefinitions.find((item) => item.key === state.filter);
   title.textContent = activeFilter ? activeFilter.label : "전체";
-  description.textContent = activeFilter?.description || "";
   caption.textContent = `${number(vods.length)}개 / 전체 ${number(snapshot.summary.total || 0)}개`;
 
   if (vods.length === 0) {
@@ -274,7 +255,6 @@ function renderTable(snapshot) {
                   ${vod.delete_on_policy_day ? `<span class="badge danger">6월 1일 삭제</span>` : ""}
                   ${vod.views_900_plus ? `<span class="badge">순수조회 900+</span>` : ""}
                   ${vod.views_1000_plus ? `<span class="badge safe">순수조회 1000회 초과</span>` : ""}
-                  ${vod.support_10_plus ? `<span class="badge">별풍/애드벌룬 10개 이상</span>` : ""}
                   ${vod.auto_support_confirmed ? `<span class="badge safe">${escapeHtml(autoSupportBadgeLabel(vod))}</span>` : ""}
                 </div>
               </div>
@@ -301,7 +281,6 @@ function renderTable(snapshot) {
               </span>
             </div>
             ${vod.auto_support_confirmed ? `<div class="mini-copy">${escapeHtml(autoSupportDetail(vod))}</div>` : ""}
-            ${vod.support_10_plus ? `<div class="mini-copy">${escapeHtml(support10PlusDetail(vod))}</div>` : ""}
           </td>
         </tr>
       `
