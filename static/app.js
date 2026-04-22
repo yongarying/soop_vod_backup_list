@@ -4,6 +4,7 @@ const state = {
   search: "",
   view: "vods",
   page: 1,
+  completionPage: 1,
 };
 const POLL_INTERVAL_MS = 60000;
 const PAGE_SIZE = 30;
@@ -129,8 +130,15 @@ function autoSupportDetail(vod) {
   return `${actor} ${supportName} ${number(vod.auto_support_amount)}개 확인`;
 }
 
+function autoSupportCompletedAt(vod) {
+  if (!vod.auto_support_confirmed || !vod.auto_support_reg_date) return "";
+  return `${formatUploadDateTime(vod.auto_support_reg_date)} 완료`;
+}
+
 function policyDetailLines(vod) {
-  return [autoSupportDetail(vod), viewPermanentReasonLabel(vod), policyReasonLabel(vod)].filter(Boolean);
+  return [autoSupportDetail(vod), autoSupportCompletedAt(vod), viewPermanentReasonLabel(vod), policyReasonLabel(vod)].filter(
+    Boolean
+  );
 }
 
 function metaRows(snapshot) {
@@ -226,6 +234,7 @@ function safeThumbnailUrl(vod) {
 function renderTable(snapshot) {
   const vods = filteredVods(snapshot);
   const title = document.getElementById("tableTitle");
+  const completionStatusElement = document.getElementById("completionStatus");
   const caption = document.getElementById("tableCaption");
   const body = document.getElementById("vodTableBody");
   const totalPages = Math.max(1, Math.ceil(vods.length / PAGE_SIZE));
@@ -240,6 +249,11 @@ function renderTable(snapshot) {
 
   const activeFilter = filterDefinitions.find((item) => item.key === state.filter);
   title.textContent = activeFilter ? activeFilter.label : "전체";
+  const completion = completionStatus(snapshot);
+  state.completionPage = completion.page;
+  completionStatusElement.textContent = completion.label;
+  completionStatusElement.disabled = !completion.page;
+  completionStatusElement.classList.toggle("hidden", !completion.label);
   caption.textContent = `${number(pageStart)}-${number(pageEnd)}개 표시 / 조건 ${number(vods.length)}개 / 전체 ${number(
     snapshot.summary.total || 0
   )}개`;
@@ -295,6 +309,28 @@ function renderTable(snapshot) {
       }
     )
     .join("");
+}
+
+function completionStatus(snapshot) {
+  if (state.filter !== "all") return { label: "", page: 0 };
+  const vods = snapshot.vods || [];
+  let completedCount = 0;
+
+  for (const vod of vods) {
+    if (!vod.future_permanent) break;
+    completedCount += 1;
+  }
+
+  if (completedCount === 0) {
+    return { label: "완료: 아직 없음", page: 0 };
+  }
+
+  const completedPage = Math.ceil(completedCount / PAGE_SIZE);
+  const completedIndexOnPage = ((completedCount - 1) % PAGE_SIZE) + 1;
+  return {
+    label: `완료: ${number(completedPage)}페이지 ${number(completedIndexOnPage)}번 VOD까지`,
+    page: completedPage,
+  };
 }
 
 function renderPagination(totalItems, totalPages) {
@@ -400,6 +436,15 @@ document.getElementById("rankingButton").addEventListener("click", () => {
 document.getElementById("searchInput").addEventListener("input", (event) => {
   state.search = event.target.value || "";
   state.page = 1;
+  render();
+});
+
+document.getElementById("completionStatus").addEventListener("click", () => {
+  if (!state.snapshot || !state.completionPage) return;
+  state.filter = "all";
+  state.search = "";
+  state.page = state.completionPage;
+  document.getElementById("searchInput").value = "";
   render();
 });
 

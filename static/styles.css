@@ -197,6 +197,31 @@ body {
   font-size: 20px;
 }
 
+.table-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.completion-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  background: var(--safe);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.completion-status:disabled {
+  cursor: default;
+}
+
 .table-caption {
   margin: 0;
   color: var(--muted);
