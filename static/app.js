@@ -235,7 +235,6 @@ function renderTable(snapshot) {
   const vods = filteredVods(snapshot);
   const title = document.getElementById("tableTitle");
   const completionStatusElement = document.getElementById("completionStatus");
-  const caption = document.getElementById("tableCaption");
   const body = document.getElementById("vodTableBody");
   const totalPages = Math.max(1, Math.ceil(vods.length / PAGE_SIZE));
 
@@ -244,8 +243,6 @@ function renderTable(snapshot) {
 
   const startIndex = (state.page - 1) * PAGE_SIZE;
   const pageVods = vods.slice(startIndex, startIndex + PAGE_SIZE);
-  const pageStart = vods.length ? startIndex + 1 : 0;
-  const pageEnd = startIndex + pageVods.length;
 
   const activeFilter = filterDefinitions.find((item) => item.key === state.filter);
   title.textContent = activeFilter ? activeFilter.label : "전체";
@@ -254,9 +251,6 @@ function renderTable(snapshot) {
   completionStatusElement.textContent = completion.label;
   completionStatusElement.disabled = !completion.page;
   completionStatusElement.classList.toggle("hidden", !completion.label);
-  caption.textContent = `${number(pageStart)}-${number(pageEnd)}개 표시 / 조건 ${number(vods.length)}개 / 전체 ${number(
-    snapshot.summary.total || 0
-  )}개`;
   renderPagination(vods.length, totalPages);
 
   if (vods.length === 0) {
