@@ -265,9 +265,20 @@ tbody td:last-child {
   border-right: 0;
 }
 
+tbody tr.row-highlight td {
+  background: #fff8cf;
+}
+
+.cell-index,
 .cell-upload,
 .cell-policy {
   white-space: nowrap;
+}
+
+.cell-index {
+  width: 72px;
+  text-align: center;
+  font-weight: 700;
 }
 
 .cell-upload {
