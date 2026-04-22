@@ -618,13 +618,7 @@ class SoopReplayMonitor:
                 )
                 for item in raw_vods
             ]
-            computed_vods.sort(
-                key=lambda item: (
-                    {"policy_day": 0, "soon": 1, "later": 2, "safe": 3}[item["urgency"]],
-                    item["future_expiry_date"] or "9999-12-31",
-                    item["uploaded_at"],
-                )
-            )
+            computed_vods.sort(key=lambda item: item["uploaded_at"])
 
             summary = self._build_summary(computed_vods)
             participant_ranking = merge_participant_totals(scanned_comment_checks.values())
