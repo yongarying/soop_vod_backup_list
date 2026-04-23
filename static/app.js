@@ -88,6 +88,8 @@ function formatUploadDateTime(value) {
 function renderHeader(snapshot) {
   document.title = snapshot.page_title || "캬앙 다시보기 살리기 캠페인";
   document.getElementById("pageHeading").textContent = snapshot.page_heading || "캬앙 다시보기 살리기 캠페인";
+  const streamerId = encodeURIComponent(snapshot.streamer_id || "kyaang123");
+  document.getElementById("soopVodIndexLink").href = `https://www.sooplive.com/station/${streamerId}/vod/review?sort=reg_date_asc`;
 }
 
 function policyLabel(vod) {
