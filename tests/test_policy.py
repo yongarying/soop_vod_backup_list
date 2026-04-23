@@ -221,8 +221,8 @@ class SecurityTests(unittest.TestCase):
         public_snapshot = build_public_snapshot(snapshot)
 
         self.assertEqual(public_snapshot["summary"]["total"], 1)
+        self.assertEqual(public_snapshot["streamer_id"], "kyaang123")
         self.assertEqual(public_snapshot["participant_ranking"][0]["user_id"], "supporter")
-        self.assertNotIn("streamer_id", public_snapshot)
         self.assertNotIn("api_auto_delete", public_snapshot["summary"])
         self.assertNotIn("internal_note", public_snapshot["participant_ranking"][0])
         self.assertEqual(public_snapshot["vods"][0]["auto_support_user_id"], "secret")

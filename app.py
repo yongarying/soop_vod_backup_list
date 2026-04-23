@@ -156,6 +156,7 @@ def select_fields(payload: Dict[str, Any], allowed_fields: Iterable[str]) -> Dic
 
 def build_public_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     return {
+        "streamer_id": snapshot.get("streamer_id"),
         "page_title": snapshot.get("page_title"),
         "page_heading": snapshot.get("page_heading"),
         "policy_date": snapshot.get("policy_date"),
