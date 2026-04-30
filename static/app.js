@@ -13,10 +13,8 @@ const PAGE_BUTTON_COUNT = 10;
 
 const filterDefinitions = [
   { key: "all", label: "전체" },
+  { key: "other", label: "만료 예정" },
   { key: "permanent", label: "영구보관" },
-  { key: "policy_day", label: "6월 1일 삭제" },
-  { key: "soon", label: "정책 시행 후 90일 이내 삭제" },
-  { key: "other", label: "나머지" },
   { key: "confirmed", label: "별풍 확인" },
   { key: "views_900_plus", label: "순수조회 900회 이상" },
   { key: "views_1000_plus", label: "순수조회 1000회 초과" },
@@ -175,8 +173,6 @@ function renderFilters(snapshot) {
   const counts = {
     all: summary.total || 0,
     permanent: summary.future_permanent || 0,
-    policy_day: summary.policy_day_delete || 0,
-    soon: summary.soon_after_policy || 0,
     other: summary.other_count || 0,
     confirmed: summary.confirmed || 0,
     views_900_plus: summary.views_900_plus || 0,
@@ -208,12 +204,8 @@ function filteredVods(snapshot) {
         return true;
       case "permanent":
         return vod.future_permanent;
-      case "policy_day":
-        return vod.delete_on_policy_day;
-      case "soon":
-        return vod.urgency === "soon";
       case "other":
-        return !vod.future_permanent && !vod.delete_on_policy_day && vod.urgency !== "soon" && !vod.support_confirmed;
+        return !vod.future_permanent && !vod.support_confirmed;
       case "confirmed":
         return vod.support_confirmed;
       case "views_900_plus":
