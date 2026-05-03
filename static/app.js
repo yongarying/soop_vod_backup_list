@@ -14,6 +14,8 @@ const PAGE_BUTTON_COUNT = 10;
 const filterDefinitions = [
   { key: "all", label: "전체" },
   { key: "other", label: "만료 예정" },
+  { key: "policy_day_delete", label: "정책일 삭제" },
+  { key: "soon_after_policy", label: "정책 시행 후 90일 이내 삭제" },
   { key: "permanent", label: "영구보관" },
   { key: "confirmed", label: "별풍 확인" },
   { key: "views_900_plus", label: "순수조회 900회 이상" },
@@ -81,6 +83,24 @@ function formatDateTime(value) {
 function formatUploadDateTime(value) {
   if (!value) return "-";
   return value.replace("T", " ");
+}
+
+function formatPolicyDateShort(value) {
+  const [year, month, day] = String(value || "2026-06-01").split("-");
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+  if (Number.isFinite(monthNumber) && Number.isFinite(dayNumber)) {
+    return `${monthNumber}월 ${dayNumber}일`;
+  }
+  return `${year || ""}-${month || ""}-${day || ""}`.replace(/-+$/g, "");
+}
+
+function filterLabel(filter, snapshot) {
+  if (!filter) return "전체";
+  if (filter.key === "policy_day_delete") {
+    return `${formatPolicyDateShort(snapshot?.policy_date)} 삭제`;
+  }
+  return filter.label;
 }
 
 function renderHeader(snapshot) {
@@ -174,6 +194,8 @@ function renderFilters(snapshot) {
     all: summary.total || 0,
     permanent: summary.future_permanent || 0,
     other: summary.other_count || 0,
+    policy_day_delete: summary.policy_day_delete || 0,
+    soon_after_policy: summary.soon_after_policy || 0,
     confirmed: summary.confirmed || 0,
     views_900_plus: summary.views_900_plus || 0,
     views_1000_plus: summary.views_1000_plus || 0,
@@ -183,7 +205,7 @@ function renderFilters(snapshot) {
     .map(
       (filter) => `
         <button class="filter-button ${state.filter === filter.key ? "active" : ""}" type="button" data-filter="${filter.key}">
-          <span>${escapeHtml(filter.label)}</span>
+          <span>${escapeHtml(filterLabel(filter, snapshot))}</span>
           <span class="filter-count">${number(counts[filter.key])}</span>
         </button>
       `
@@ -206,6 +228,10 @@ function filteredVods(snapshot) {
         return vod.future_permanent;
       case "other":
         return !vod.future_permanent && !vod.support_confirmed;
+      case "policy_day_delete":
+        return vod.delete_on_policy_day;
+      case "soon_after_policy":
+        return vod.urgency === "soon";
       case "confirmed":
         return vod.support_confirmed;
       case "views_900_plus":
@@ -240,7 +266,7 @@ function renderTable(snapshot) {
   const pageVods = vods.slice(startIndex, startIndex + PAGE_SIZE);
 
   const activeFilter = filterDefinitions.find((item) => item.key === state.filter);
-  title.textContent = activeFilter ? activeFilter.label : "전체";
+  title.textContent = filterLabel(activeFilter, snapshot);
   const completion = completionStatus(snapshot);
   state.completionPage = completion.page;
   state.completionNextIndexOnPage = completion.nextIndexOnPage;
