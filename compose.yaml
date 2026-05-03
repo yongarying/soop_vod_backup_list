@@ -5,13 +5,13 @@ services:
       dockerfile: Dockerfile
     container_name: soop-replay-monitor
     environment:
-      SOOP_STREAMER_ID: "kyaang123"
-      SOOP_DISPLAY_NAME: "캬앙"
-      SOOP_STREAMER_TIER: "best"
-      SOOP_POLICY_DATE: "2026-06-01"
-      SOOP_POLL_INTERVAL_SECONDS: "60"
-      SOOP_HOST: "0.0.0.0"
-      SOOP_PORT: "8000"
+      SOOP_STREAMER_ID: "${SOOP_STREAMER_ID:-kyaang123}"
+      SOOP_DISPLAY_NAME: "${SOOP_DISPLAY_NAME:-캬앙}"
+      SOOP_STREAMER_TIER: "${SOOP_STREAMER_TIER:-best}"
+      SOOP_POLICY_DATE: "${SOOP_POLICY_DATE:-2026-06-01}"
+      SOOP_POLL_INTERVAL_SECONDS: "${SOOP_POLL_INTERVAL_SECONDS:-60}"
+      SOOP_HOST: "${SOOP_HOST:-0.0.0.0}"
+      SOOP_PORT: "${SOOP_PORT:-8000}"
     ports:
       - "8000:8000"
     volumes:

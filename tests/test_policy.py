@@ -3,11 +3,13 @@ from datetime import date
 from unittest.mock import patch
 
 from app import (
+    SoopReplayMonitor,
     build_public_snapshot,
     build_settings,
     classify_vod,
     extract_participant_starballoons,
     extract_support_evidence,
+    filter_comment_checks_for_title_nos,
     merge_participant_totals,
     normalize_url,
 )
@@ -322,6 +324,85 @@ class CommentScanTests(unittest.TestCase):
 
         self.assertEqual(ranking[0]["user_nick"], "최신닉")
         self.assertEqual(ranking[0]["total_starballoons"], 50)
+
+    def test_comment_cache_filters_out_other_streamer_titles(self):
+        comment_checks = {
+            "101": {
+                "title_no": "101",
+                "participant_starballoons": [
+                    {"user_id": "current", "user_nick": "현재", "total_starballoons": 20}
+                ],
+            },
+            "202": {
+                "title_no": "202",
+                "participant_starballoons": [
+                    {"user_id": "old", "user_nick": "이전", "total_starballoons": 999}
+                ],
+            },
+        }
+
+        filtered = filter_comment_checks_for_title_nos(comment_checks, [101])
+        ranking = merge_participant_totals(filtered.values())
+
+        self.assertEqual(list(filtered.keys()), ["101"])
+        self.assertEqual(len(ranking), 1)
+        self.assertEqual(ranking[0]["user_id"], "current")
+        self.assertEqual(ranking[0]["total_starballoons"], 20)
+
+
+class SummaryTests(unittest.TestCase):
+    def test_other_count_includes_all_non_permanent_vods(self):
+        summary = SoopReplayMonitor._build_summary(
+            [
+                {
+                    "future_permanent": True,
+                    "views_900_plus": False,
+                    "views_1000_plus": False,
+                    "support_confirmed": False,
+                    "delete_on_policy_day": False,
+                    "urgency": "safe",
+                    "api_auto_delete_flag": False,
+                    "needs_pre_policy_support": False,
+                },
+                {
+                    "future_permanent": False,
+                    "views_900_plus": False,
+                    "views_1000_plus": False,
+                    "support_confirmed": False,
+                    "delete_on_policy_day": True,
+                    "urgency": "policy_day",
+                    "api_auto_delete_flag": False,
+                    "needs_pre_policy_support": True,
+                },
+                {
+                    "future_permanent": False,
+                    "views_900_plus": False,
+                    "views_1000_plus": False,
+                    "support_confirmed": False,
+                    "delete_on_policy_day": False,
+                    "urgency": "soon",
+                    "api_auto_delete_flag": False,
+                    "needs_pre_policy_support": True,
+                },
+                {
+                    "future_permanent": False,
+                    "views_900_plus": False,
+                    "views_1000_plus": False,
+                    "support_confirmed": False,
+                    "delete_on_policy_day": False,
+                    "urgency": "later",
+                    "api_auto_delete_flag": False,
+                    "needs_pre_policy_support": True,
+                },
+            ]
+        )
+
+        self.assertEqual(summary["total"], 4)
+        self.assertEqual(summary["future_permanent"], 1)
+        self.assertEqual(summary["other_count"], 3)
+        self.assertEqual(summary["policy_day_delete"], 1)
+        self.assertEqual(summary["soon_after_policy"], 1)
+        self.assertEqual(summary["later_delete"], 1)
 
 
 if __name__ == "__main__":

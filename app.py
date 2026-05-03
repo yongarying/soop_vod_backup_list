@@ -195,6 +195,18 @@ def save_state_cache(path: Path, state: Dict[str, Any]) -> None:
     temp_path.replace(path)
 
 
+def filter_comment_checks_for_title_nos(
+    comment_checks: Dict[str, Any],
+    title_nos: Iterable[Any],
+) -> Dict[str, Dict[str, Any]]:
+    allowed_title_nos = {str(title_no) for title_no in title_nos if title_no is not None}
+    return {
+        str(title_no): record
+        for title_no, record in comment_checks.items()
+        if str(title_no) in allowed_title_nos and isinstance(record, dict)
+    }
+
+
 def extract_auto_delete_lookup(entries: Iterable[Any]) -> Dict[str, set[str]]:
     ids: set[str] = set()
     titles: set[str] = set()
@@ -583,7 +595,10 @@ class SoopReplayMonitor:
                 auto_del_entries.extend(payload.get("auto_del_vods", []))
 
             auto_delete_lookup = extract_auto_delete_lookup(auto_del_entries)
-            scanned_comment_checks = dict(comment_checks)
+            scanned_comment_checks = filter_comment_checks_for_title_nos(
+                comment_checks,
+                (item.get("title_no") for item in raw_vods),
+            )
             comment_scan_candidates = [
                 item
                 for item in raw_vods
@@ -603,11 +618,11 @@ class SoopReplayMonitor:
                         result = future.result()
                         scanned_comment_checks[result["title_no"]] = result
 
-                with self._lock:
-                    self._state_cache["comment_checks"] = {
-                        item["title_no"]: item for item in scanned_comment_checks.values() if item
-                    }
-                    save_state_cache(STATE_PATH, self._state_cache)
+            with self._lock:
+                self._state_cache["comment_checks"] = {
+                    item["title_no"]: item for item in scanned_comment_checks.values() if item
+                }
+                save_state_cache(STATE_PATH, self._state_cache)
 
             computed_vods = [
                 classify_vod(
@@ -807,6 +822,8 @@ class SoopReplayMonitor:
         for vod in vods:
             if vod["future_permanent"]:
                 summary["future_permanent"] += 1
+            else:
+                summary["other_count"] += 1
             if vod["views_900_plus"]:
                 summary["views_900_plus"] += 1
             if vod["views_1000_plus"]:
@@ -820,7 +837,6 @@ class SoopReplayMonitor:
             elif vod["urgency"] == "soon":
                 summary["soon_after_policy"] += 1
             else:
-                summary["other_count"] += 1
                 if vod["urgency"] == "later":
                     summary["later_delete"] += 1
 
